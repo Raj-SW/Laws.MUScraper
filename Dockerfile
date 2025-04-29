@@ -1,21 +1,15 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# 1) Base image includes Node.js, Playwright browsers & required OS packages
-FROM mcr.microsoft.com/playwright:v1.52.0-focal
+# 1) use a real, published Playwright image
+FROM mcr.microsoft.com/playwright:v1.52.0-jammy
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2) Create app directory
+# 2) make /app our working directory
 WORKDIR /app
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3) Copy package manifest & install dependencies
-#    This also triggers Playwright’s install hooks (browsers already present).
+# 3) copy only the manifest & lockfile, then install
 COPY package*.json ./
 RUN npm ci
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4) Copy your scraper code
+# 4) copy the rest of your code
 COPY . .
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 5) Launch your scraper when container starts
+# 5) when container starts, run your scraper
 CMD ["node", "scraper.js"]
