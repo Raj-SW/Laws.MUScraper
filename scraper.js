@@ -13,6 +13,7 @@ const pdfParse = require("pdf-parse"); // Add this dependency
  * 4. Storing extracted data in a JSON file
  * 5. Cleaning up downloaded files
  */
+
 async function scrapeCourt() {
   // Configuration
   const DOWNLOAD_DIR = path.join(__dirname, "downloads");
@@ -28,7 +29,7 @@ async function scrapeCourt() {
   console.log(`📁 Created download directory: ${DOWNLOAD_DIR}`);
 
   const browser = await chromium.launch({
-    headless: false,
+    headless: true,
     slowMo: 50, // Reduced slowMo for better performance
   });
 
