@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.5.0",
     "pdf-parse": "^1.1.1",
     "playwright": "^1.52.0"
   }
