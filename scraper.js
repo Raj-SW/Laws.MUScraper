@@ -20,21 +20,60 @@ async function scrapeCourt() {
   console.log("🚀 Starting Supreme Court judgment scraper");
   await fs.mkdir(DOWNLOAD_DIR, { recursive: true });
 
-  const browser = await chromium.launch({ headless: true, slowMo: 50 });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+      "--disable-web-security",
+      "--disable-features=IsolateOrigins,site-per-process",
+    ],
+  });
+
   try {
     const context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
       acceptDownloads: true,
       downloadsPath: DOWNLOAD_DIR,
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     });
+
+    console.log("Navigating to judgment search page...");
+    const page = await context.newPage();
+
+    // Add request logging
     context.on("request", (request) =>
       console.debug(`>> ${request.method()} ${request.url().slice(0, 100)}...`)
     );
+    context.on("requestfailed", (request) =>
+      console.error(
+        `❌ Failed request: ${request.url().slice(0, 100)}... - ${
+          request.failure()?.errorText
+        }`
+      )
+    );
 
-    const page = await context.newPage();
-    await page.goto("https://supremecourt.govmu.org/judgment-search", {
-      waitUntil: "networkidle",
-    });
+    try {
+      await page.goto("https://supremecourt.govmu.org/judgment-search", {
+        waitUntil: "networkidle",
+        timeout: 60000, // Increase timeout to 60 seconds
+      });
+    } catch (error) {
+      console.error(
+        "❌ Initial navigation failed, retrying with domcontentloaded..."
+      );
+      // Retry with less strict wait condition
+      await page.goto("https://supremecourt.govmu.org/judgment-search", {
+        waitUntil: "domcontentloaded",
+        timeout: 60000,
+      });
+    }
 
     const visited = new Set();
     const queue = [];
