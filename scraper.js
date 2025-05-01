@@ -70,9 +70,32 @@ async function scrapeCourt() {
           await row.locator("td").nth(0).textContent()
         ).trim();
         const caseTitle = (await row.locator("td").nth(1).textContent()).trim();
-        const judgmentDate = (
-          await row.locator("td").nth(2).textContent()
-        ).trim();
+        let judgmentDate = await row
+          .locator("td.views-field-field-delivered-on a")
+          .textContent();
+        if (judgmentDate) judgmentDate = judgmentDate.trim();
+
+        let formattedDate = null;
+        if (
+          judgmentDate &&
+          typeof judgmentDate === "string" &&
+          judgmentDate.includes("/")
+        ) {
+          const [day, month, year] = judgmentDate.split("/");
+          if (day && month && year) {
+            formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
+              2,
+              "0"
+            )}`;
+          }
+        }
+
+        if (!formattedDate) {
+          console.warn(
+            `⚠️ Skipping ${caseNumber} - Invalid or missing judgment date: "${judgmentDate}"`
+          );
+          continue;
+        }
 
         console.log(`  🔍 ${caseNumber} - ${caseTitle}`);
         let success = false,
@@ -94,7 +117,7 @@ async function scrapeCourt() {
               {
                 case_number: caseNumber,
                 case_title: caseTitle,
-                judgment_date: judgmentDate,
+                judgment_date: formattedDate,
                 file_name: download.suggestedFilename(),
                 content: pdf.text,
                 page_count: pdf.pageCount,
@@ -110,7 +133,7 @@ async function scrapeCourt() {
             await fs.unlink(filePath);
           } catch (e) {
             retries++;
-            console.error(`  ⚠️ retry ${retries}: ${e.message}`);
+            console.error(`  ⚠️ retry ${retries}: ${e}`);
             await page.waitForTimeout(2000 * retries);
           }
         }
