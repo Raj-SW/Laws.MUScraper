@@ -20,20 +20,51 @@ async function scrapeCourt() {
   console.log("🚀 Starting Supreme Court judgment scraper");
   await fs.mkdir(DOWNLOAD_DIR, { recursive: true });
 
-  const browser = await chromium.launch({ headless: true, slowMo: 50 });
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+    ],
+  });
+
   try {
     const context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
-      acceptDownloads: true,
+      acceptDownloads: false, // switch to manual fetch
       downloadsPath: DOWNLOAD_DIR,
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     });
-    context.on("request", (request) =>
-      console.debug(`>> ${request.method()} ${request.url().slice(0, 100)}...`)
+
+    // block images/fonts/styles to speed up loading
+    await context.route("**/*", (route) => {
+      const type = route.request().resourceType();
+      if (["image", "stylesheet", "font"].includes(type)) return route.abort();
+      return route.continue();
+    });
+
+    console.log("Navigating to judgment search page...");
+    const page = await context.newPage();
+    context.on("request", (req) =>
+      console.debug(`>> ${req.method()} ${req.url().slice(0, 100)}...`)
+    );
+    context.on("requestfailed", (req) =>
+      console.error(
+        `❌ Failed request: ${req.url().slice(0, 100)} - ${
+          req.failure()?.errorText
+        }`
+      )
     );
 
-    const page = await context.newPage();
     await page.goto("https://supremecourt.govmu.org/judgment-search", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
     });
 
     const visited = new Set();
@@ -43,7 +74,7 @@ async function scrapeCourt() {
 
     while (true) {
       console.log(`\n📄 Processing page ${currentPage}`);
-      // discover pagination
+      // discover new pages
       const pager = page.locator(
         "ul.pager__items.js-pager__items li.pager__item a"
       );
@@ -58,7 +89,10 @@ async function scrapeCourt() {
         }
       }
 
-      await page.waitForSelector("tbody tr", { state: "visible" });
+      await page.waitForSelector("tbody tr", {
+        state: "visible",
+        timeout: 30000,
+      });
       const downloads = page.locator("div.nothingCell a.faDownload");
       const dcount = await downloads.count();
       console.log(`  Found ${dcount} files`);
@@ -73,67 +107,64 @@ async function scrapeCourt() {
         let judgmentDate = await row
           .locator("td.views-field-field-delivered-on a")
           .textContent();
-        if (judgmentDate) judgmentDate = judgmentDate.trim();
+        judgmentDate = judgmentDate?.trim();
 
         let formattedDate = null;
-        if (
-          judgmentDate &&
-          typeof judgmentDate === "string" &&
-          judgmentDate.includes("/")
-        ) {
+        if (judgmentDate?.includes("/")) {
           const [day, month, year] = judgmentDate.split("/");
-          if (day && month && year) {
-            formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
-              2,
-              "0"
-            )}`;
-          }
+          formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
+            2,
+            "0"
+          )}`;
         }
-
         if (!formattedDate) {
           console.warn(
-            `⚠️ Skipping ${caseNumber} - Invalid or missing judgment date: "${judgmentDate}"`
+            `⚠️ Skipping ${caseNumber} - bad date: "${judgmentDate}"`
           );
           continue;
         }
 
         console.log(`  🔍 ${caseNumber} - ${caseTitle}`);
         let success = false,
-          retries = 0,
-          filePath;
+          retries = 0;
 
         while (!success && retries < MAX_RETRIES) {
           try {
-            const dlPromise = page.waitForEvent("download", { timeout: 30000 });
-            await link.click();
-            const download = await dlPromise;
-            filePath = await download.path();
-            console.log(`  ⬇️ saved ${download.suggestedFilename()}`);
+            // fetch PDF manually
+            const href = await link.getAttribute("href");
+            const url = new URL(href, page.url()).toString();
+            console.log(`  ⬇️ fetching ${url}`);
+            const resp = await context.request.get(url);
+            const buffer = await resp.body();
+            const fileName = path.basename(new URL(url).pathname);
+            const filePath = path.join(DOWNLOAD_DIR, fileName);
+            await fs.writeFile(filePath, buffer);
+            console.log(`  ✅ saved ${fileName}`);
             success = true;
 
             const pdf = await extractPdfContent(filePath, TEXT_EXTRACT_LIMIT);
-            // insert into Supabase
             const { data, error } = await supabase.from("judgments").insert([
               {
                 case_number: caseNumber,
                 case_title: caseTitle,
                 judgment_date: formattedDate,
-                file_name: download.suggestedFilename(),
+                file_name: fileName,
                 content: pdf.text,
                 page_count: pdf.pageCount,
                 metadata: pdf.metadata,
                 page_number: currentPage,
                 extracted_at: new Date().toISOString(),
-                download_url: await link.getAttribute("href"),
+                download_url: url,
               },
             ]);
             if (error) console.error("Supabase error:", error);
             else console.log(`  ✅ inserted id ${data[0].id}`);
 
             await fs.unlink(filePath);
+            totalFiles++;
           } catch (e) {
             retries++;
-            console.error(`  ⚠️ retry ${retries}: ${e}`);
+            console.error(`  ⚠️ retry ${retries}: ${e.message}`);
             await page.waitForTimeout(2000 * retries);
           }
         }
@@ -142,14 +173,17 @@ async function scrapeCourt() {
       if (!queue.length) break;
       currentPage = queue.shift();
       await Promise.all([
-        page.waitForNavigation({ waitUntil: "networkidle" }),
+        page.waitForNavigation({
+          waitUntil: "domcontentloaded",
+          timeout: 60000,
+        }),
         page.click(
           `ul.pager__items.js-pager__items li.pager__item a[href*="page=${currentPage}"]`
         ),
       ]).catch(async () => {
         await page.goto(
           `https://supremecourt.govmu.org/judgment-search?page=${currentPage}`,
-          { waitUntil: "networkidle" }
+          { waitUntil: "domcontentloaded", timeout: 60000 }
         );
       });
     }
@@ -174,9 +208,6 @@ async function extractPdfContent(filePath, limit) {
   };
 }
 
-function truncateString(s, n) {
-  return s.length > n ? s.slice(0, n) + "..." : s;
-}
 scrapeCourt().catch((e) => {
   console.error(e);
   process.exit(1);
