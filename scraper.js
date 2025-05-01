@@ -21,7 +21,7 @@ async function scrapeCourt() {
   try {
     console.log("🚀 Starting Supreme Court judgment scraper");
     await fs.mkdir(DOWNLOAD_DIR, { recursive: true }).catch((e) => {
-      console.error("❌ Failed to create downloads directory:", e.message);
+      console.error("❌ Failed to create downloads directory:", e);
       throw e;
     });
 
@@ -40,7 +40,7 @@ async function scrapeCourt() {
         ],
       })
       .catch((e) => {
-        console.error("❌ Failed to launch browser:", e.message);
+        console.error("❌ Failed to launch browser:", e);
         throw e;
       });
 
@@ -54,7 +54,7 @@ async function scrapeCourt() {
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
       })
       .catch((e) => {
-        console.error("❌ Failed to create browser context:", e.message);
+        console.error("❌ Failed to create browser context:", e);
         throw e;
       });
 
@@ -67,13 +67,13 @@ async function scrapeCourt() {
         return route.continue();
       });
     } catch (e) {
-      console.error("⚠️ Failed to set up resource blocking:", e.message);
+      console.error("⚠️ Failed to set up resource blocking:", e);
       // Don't throw - this is non-critical
     }
 
     console.log("📝 Creating new page...");
     const page = await context.newPage().catch((e) => {
-      console.error("❌ Failed to create new page:", e.message);
+      console.error("❌ Failed to create new page:", e);
       throw e;
     });
 
@@ -81,7 +81,7 @@ async function scrapeCourt() {
       try {
         console.debug(`>> ${req.method()} ${req.url().slice(0, 100)}...`);
       } catch (e) {
-        console.error("⚠️ Error logging request:", e.message);
+        console.error("⚠️ Error logging request:", e);
       }
     });
 
@@ -93,7 +93,7 @@ async function scrapeCourt() {
           }`
         );
       } catch (e) {
-        console.error("⚠️ Error logging failed request:", e.message);
+        console.error("⚠️ Error logging failed request:", e);
       }
     });
 
@@ -104,7 +104,7 @@ async function scrapeCourt() {
         timeout: 60000,
       })
       .catch((e) => {
-        console.error("❌ Failed to navigate to initial page:", e.message);
+        console.error("❌ Failed to navigate to initial page:", e);
         throw e;
       });
 
@@ -133,14 +133,11 @@ async function scrapeCourt() {
                 queue.push(pageNum);
               }
             } catch (e) {
-              console.error(
-                `⚠️ Error processing pagination anchor ${i}:`,
-                e.message
-              );
+              console.error(`⚠️ Error processing pagination anchor ${i}:`, e);
             }
           }
         } catch (e) {
-          console.error("❌ Error discovering pagination:", e.message);
+          console.error("❌ Error discovering pagination:", e);
           throw e;
         }
 
@@ -151,7 +148,7 @@ async function scrapeCourt() {
             timeout: 30000,
           });
         } catch (e) {
-          console.error("❌ Table rows not found:", e.message);
+          console.error("❌ Table rows not found:", e);
           throw e;
         }
 
@@ -263,29 +260,23 @@ async function scrapeCourt() {
                   }
 
                   await fs.unlink(filePath).catch((e) => {
-                    console.error(
-                      "⚠️ Failed to delete temporary file:",
-                      e.message
-                    );
+                    console.error("⚠️ Failed to delete temporary file:", e);
                   });
                 } catch (e) {
                   retries++;
-                  console.error(`  ⚠️ retry ${retries}:`, e.message);
-                  if (e.stack) console.error("Stack trace:", e.stack);
+                  console.error(`  ⚠️ retry ${retries}:`, e);
+                  if (e) console.error("Stack trace:", e);
                   await page.waitForTimeout(2000 * retries);
                 }
               }
             } catch (e) {
-              console.error(
-                `❌ Fatal error processing download ${i}:`,
-                e.message
-              );
-              if (e.stack) console.error("Stack trace:", e.stack);
+              console.error(`❌ Fatal error processing download ${i}:`, e);
+              if (e) console.error("Stack trace:", e);
             }
           }
         } catch (e) {
-          console.error("❌ Error processing downloads on page:", e.message);
-          if (e.stack) console.error("Stack trace:", e.stack);
+          console.error("❌ Error processing downloads on page:", e);
+          if (e) console.error("Stack trace:", e);
           throw e;
         }
 
@@ -310,31 +301,28 @@ async function scrapeCourt() {
             );
           });
         } catch (e) {
-          console.error(
-            `❌ Failed to navigate to page ${currentPage}:`,
-            e.message
-          );
-          if (e.stack) console.error("Stack trace:", e.stack);
+          console.error(`❌ Failed to navigate to page ${currentPage}:`, e);
+          if (e) console.error("Stack trace:", e);
           throw e;
         }
       } catch (e) {
-        console.error("❌ Fatal error in main loop:", e.message);
-        if (e.stack) console.error("Stack trace:", e.stack);
+        console.error("❌ Fatal error in main loop:", e);
+        if (e) console.error("Stack trace:", e);
         throw e;
       }
     }
 
     console.log(`\n✅ Done. Processed ${totalFiles}`);
   } catch (e) {
-    console.error("❌ Fatal error in scrapeCourt:", e.message);
-    if (e.stack) console.error("Stack trace:", e.stack);
+    console.error("❌ Fatal error in scrapeCourt:", e);
+    if (e) console.error("Stack trace:", e);
     throw e;
   } finally {
     if (browser) {
       try {
         await browser.close();
       } catch (e) {
-        console.error("⚠️ Error closing browser:", e.message);
+        console.error("⚠️ Error closing browser:", e);
       }
     }
   }
