@@ -30,8 +30,6 @@ async function scrapeCourt() {
       "--no-first-run",
       "--no-zygote",
       "--disable-gpu",
-      "--disable-web-security",
-      "--disable-features=IsolateOrigins,site-per-process",
     ],
   });
 
@@ -44,36 +42,32 @@ async function scrapeCourt() {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     });
 
+    // block images/fonts/styles to speed up loading
+    await context.route("**/*", (route) => {
+      const type = route.request().resourceType();
+      if (["image", "stylesheet", "font"].includes(type)) return route.abort();
+      return route.continue();
+    });
+
     console.log("Navigating to judgment search page...");
     const page = await context.newPage();
 
-    // Add request logging
-    context.on("request", (request) =>
-      console.debug(`>> ${request.method()} ${request.url().slice(0, 100)}...`)
+    context.on("request", (req) =>
+      console.debug(`>> ${req.method()} ${req.url().slice(0, 100)}...`)
     );
-    context.on("requestfailed", (request) =>
+    context.on("requestfailed", (req) =>
       console.error(
-        `❌ Failed request: ${request.url().slice(0, 100)}... - ${
-          request.failure()?.errorText
+        `❌ Failed request: ${req.url().slice(0, 100)} - ${
+          req.failure()?.errorText
         }`
       )
     );
 
-    try {
-      await page.goto("https://supremecourt.govmu.org/judgment-search", {
-        waitUntil: "networkidle",
-        timeout: 60000, // Increase timeout to 60 seconds
-      });
-    } catch (error) {
-      console.error(
-        "❌ Initial navigation failed, retrying with domcontentloaded..."
-      );
-      // Retry with less strict wait condition
-      await page.goto("https://supremecourt.govmu.org/judgment-search", {
-        waitUntil: "domcontentloaded",
-        timeout: 60000,
-      });
-    }
+    // initial navigation: wait for DOMContentLoaded
+    await page.goto("https://supremecourt.govmu.org/judgment-search", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    });
 
     const visited = new Set();
     const queue = [];
@@ -82,7 +76,8 @@ async function scrapeCourt() {
 
     while (true) {
       console.log(`\n📄 Processing page ${currentPage}`);
-      // discover pagination
+
+      // discover new pages
       const pager = page.locator(
         "ul.pager__items.js-pager__items li.pager__item a"
       );
@@ -97,7 +92,12 @@ async function scrapeCourt() {
         }
       }
 
-      await page.waitForSelector("tbody tr", { state: "visible" });
+      // wait only for table rows
+      await page.waitForSelector("tbody tr", {
+        state: "visible",
+        timeout: 30000,
+      });
+
       const downloads = page.locator("div.nothingCell a.faDownload");
       const dcount = await downloads.count();
       console.log(`  Found ${dcount} files`);
@@ -112,26 +112,19 @@ async function scrapeCourt() {
         let judgmentDate = await row
           .locator("td.views-field-field-delivered-on a")
           .textContent();
-        if (judgmentDate) judgmentDate = judgmentDate.trim();
+        judgmentDate = judgmentDate?.trim();
 
         let formattedDate = null;
-        if (
-          judgmentDate &&
-          typeof judgmentDate === "string" &&
-          judgmentDate.includes("/")
-        ) {
+        if (judgmentDate?.includes("/")) {
           const [day, month, year] = judgmentDate.split("/");
-          if (day && month && year) {
-            formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
-              2,
-              "0"
-            )}`;
-          }
+          formattedDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
+            2,
+            "0"
+          )}`;
         }
-
         if (!formattedDate) {
           console.warn(
-            `⚠️ Skipping ${caseNumber} - Invalid or missing judgment date: "${judgmentDate}"`
+            `⚠️ Skipping ${caseNumber} - bad date: "${judgmentDate}"`
           );
           continue;
         }
@@ -151,7 +144,6 @@ async function scrapeCourt() {
             success = true;
 
             const pdf = await extractPdfContent(filePath, TEXT_EXTRACT_LIMIT);
-            // insert into Supabase
             const { data, error } = await supabase.from("judgments").insert([
               {
                 case_number: caseNumber,
@@ -172,7 +164,7 @@ async function scrapeCourt() {
             await fs.unlink(filePath);
           } catch (e) {
             retries++;
-            console.error(`  ⚠️ retry ${retries}: ${e}`);
+            console.error(`  ⚠️ retry ${retries}: ${e.message}`);
             await page.waitForTimeout(2000 * retries);
           }
         }
@@ -180,15 +172,20 @@ async function scrapeCourt() {
 
       if (!queue.length) break;
       currentPage = queue.shift();
+
+      // navigate with domcontentloaded
       await Promise.all([
-        page.waitForNavigation({ waitUntil: "networkidle" }),
+        page.waitForNavigation({
+          waitUntil: "domcontentloaded",
+          timeout: 60000,
+        }),
         page.click(
           `ul.pager__items.js-pager__items li.pager__item a[href*="page=${currentPage}"]`
         ),
       ]).catch(async () => {
         await page.goto(
           `https://supremecourt.govmu.org/judgment-search?page=${currentPage}`,
-          { waitUntil: "networkidle" }
+          { waitUntil: "domcontentloaded", timeout: 60000 }
         );
       });
     }
@@ -213,9 +210,6 @@ async function extractPdfContent(filePath, limit) {
   };
 }
 
-function truncateString(s, n) {
-  return s.length > n ? s.slice(0, n) + "..." : s;
-}
 scrapeCourt().catch((e) => {
   console.error(e);
   process.exit(1);
