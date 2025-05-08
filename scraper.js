@@ -41,8 +41,6 @@ async function scrapeCourt() {
         viewport: { width: 1920, height: 1080 },
         acceptDownloads: true,
         downloadsPath: DOWNLOAD_DIR,
-        userAgent:
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
       })
       .catch((e) => {
         console.error("❌ Failed to create browser context:", e);
@@ -54,37 +52,9 @@ async function scrapeCourt() {
       console.error("❌ Failed to create new page:", e);
       throw e;
     });
-
-    context.on("request", (req) => {
-      try {
-        console.debug(`>> ${req.method()} ${req.url().slice(0, 100)}...`);
-      } catch (e) {
-        console.error("⚠️ Error logging request:", e);
-      }
+    await page.goto("https://supremecourt.govmu.org/judgment-search", {
+      waitUntil: "networkidle",
     });
-
-    context.on("requestfailed", (req) => {
-      try {
-        console.error(
-          `❌ Failed request: ${req.url().slice(0, 100)} - ${
-            req.failure()?.errorText
-          }`
-        );
-      } catch (e) {
-        console.error("⚠️ Error logging failed request:", e);
-      }
-    });
-
-    console.log("🌐 Navigating to initial page...");
-    await page
-      .goto("https://supremecourt.govmu.org/judgment-search", {
-        waitUntil: "domcontentloaded",
-        timeout: 60000,
-      })
-      .catch((e) => {
-        console.error("❌ Failed to navigate to initial page:", e);
-        throw e;
-      });
 
     const visited = new Set();
     const queue = [];
