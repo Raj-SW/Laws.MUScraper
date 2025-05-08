@@ -300,7 +300,7 @@ import { chromium } from "playwright";
 (async () => {
   // 1. Launch browser (set headless: false if you want to see the UI)
   const browser = await chromium.launch({
-    headless: false,
+    headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   // 2. Create a new browser context (incognito-like session)
