@@ -328,10 +328,12 @@
 // }
 // })();
 //--------------------------------------------------------------------------
+require("dotenv").config();
 const { chromium } = require("playwright");
 const fs = require("fs").promises;
 const path = require("path");
-const pdfParse = require("pdf-parse"); // Add this dependency
+const pdfParse = require("pdf-parse");
+const { createClient } = require("@supabase/supabase-js");
 
 /**
  * Supreme Court Judgment Scraper
