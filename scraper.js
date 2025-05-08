@@ -29,15 +29,6 @@ async function scrapeCourt() {
     browser = await chromium
       .launch({
         headless: true,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-accelerated-2d-canvas",
-          "--no-first-run",
-          "--no-zygote",
-          "--disable-gpu",
-        ],
       })
       .catch((e) => {
         console.error("❌ Failed to launch browser:", e);
@@ -57,19 +48,6 @@ async function scrapeCourt() {
         console.error("❌ Failed to create browser context:", e);
         throw e;
       });
-
-    // block images/fonts/styles to speed up loading
-    try {
-      await context.route("**/*", (route) => {
-        const type = route.request().resourceType();
-        if (["image", "stylesheet", "font"].includes(type))
-          return route.abort();
-        return route.continue();
-      });
-    } catch (e) {
-      console.error("⚠️ Failed to set up resource blocking:", e);
-      // Don't throw - this is non-critical
-    }
 
     console.log("📝 Creating new page...");
     const page = await context.newPage().catch((e) => {
