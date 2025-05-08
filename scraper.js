@@ -295,33 +295,46 @@
 //   process.exit(1);
 // });
 
-import { chromium } from "playwright";
+//--------------------------------------------------------------------------
+// import { chromium } from "playwright";
 
-(async () => {
-  // 1. Launch browser (set headless: false if you want to see the UI)
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+// (async () => {
+//   // 1. Launch browser (set headless: false if you want to see the UI)
+//   const browser = await chromium.launch({
+//     headless: true,
+//     args: ["--no-sandbox", "--disable-setuid-sandbox"],
+//   });
+//   // 2. Create a new browser context (incognito-like session)
+//   const context = await browser.newContext({
+//     // you can set viewport, userAgent, locale, etc. here
+//   });
+
+//   // 3. Open a new page
+//   const page = await context.newPage();
+
+//   try {
+//     // 4. Navigate to the target URL
+//     await page.goto("https://supremecourt.govmu.org/judgment-search", {
+//       waitUntil: "domcontentloaded", // wait until DOMContentLoaded event
+//       timeout: 60000, // 60 seconds timeout
+//     });
+//     console.log("✅ Navigation succeeded");
+//   } catch (err) {
+//     console.error("❌ Navigation failed:", err);
+//   } finally {
+
+//   // 5. Close browser
+//   await browser.close();
+// }
+// })();
+//--------------------------------------------------------------------------
+import https from "https";
+
+https
+  .get("https://supremecourt.govmu.org/judgment-search", (res) => {
+    console.log("STATUS:", res.statusCode);
+    res.resume();
+  })
+  .on("error", (err) => {
+    console.error("RAW HTTP error:", err);
   });
-  // 2. Create a new browser context (incognito-like session)
-  const context = await browser.newContext({
-    // you can set viewport, userAgent, locale, etc. here
-  });
-
-  // 3. Open a new page
-  const page = await context.newPage();
-
-  try {
-    // 4. Navigate to the target URL
-    await page.goto("https://supremecourt.govmu.org/judgment-search", {
-      waitUntil: "domcontentloaded", // wait until DOMContentLoaded event
-      timeout: 60000, // 60 seconds timeout
-    });
-    console.log("✅ Navigation succeeded");
-  } catch (err) {
-    console.error("❌ Navigation failed:", err);
-  } finally {
-    // 5. Close browser
-    await browser.close();
-  }
-})();
