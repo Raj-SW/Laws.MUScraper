@@ -360,7 +360,7 @@ async function scrapeCourt() {
   console.log(`📁 Created download directory: ${DOWNLOAD_DIR}`);
 
   const browser = await chromium.launch({
-    headless: false,
+    headless: true,
     slowMo: 50, // Reduced slowMo for better performance
   });
 
