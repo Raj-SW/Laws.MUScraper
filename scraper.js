@@ -16,7 +16,7 @@ const supabase = createClient(
 async function getProxiesFromGeoNode() {
   const url =
     process.env.GEONODE_URL ||
-    "https://proxylist.geonode.com/api/proxy-list?limit=10&page=1&sort_by=lastChecked";
+    "https://proxylist.geonode.com/api/proxy-list?limit=500&page=1&sort_by=lastChecked&sort_type=desc";
   try {
     const res = await axios.get(url);
     return res.data.data
