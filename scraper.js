@@ -29,6 +29,13 @@ async function scrapeCourt() {
     browser = await chromium
       .launch({
         headless: true,
+        proxy: {
+          server: "http://45.196.241.42:8001",
+          //server: process.env.PROXY_SERVER,
+          //port: process.env.PROXY_PORT,
+          // username: process.env.PROXY_USERNAME,
+          // password: process.env.PROXY_PASSWORD,
+        },
       })
       .catch((e) => {
         console.error("❌ Failed to launch browser:", e);
